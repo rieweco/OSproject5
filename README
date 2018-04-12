@@ -1,0 +1,18 @@
+README FILE
+
+Cody Riewerts
+
+GIT Repository:
+https://github.com/rieweco/OSproject4.git
+
+
+type make
+RUN: ./oss
+HELP: ./oss -h
+
+output goes to file named 'logfile' 
+the name of logfile can be changed using -l command
+-----------------------------------------------------
+
+
+

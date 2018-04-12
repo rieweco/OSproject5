@@ -3,8 +3,7 @@ README FILE
 Cody Riewerts
 
 GIT Repository:
-https://github.com/rieweco/OSproject4.git
-
+https://github.com/rieweco/OSproject5.git
 
 type make
 RUN: ./oss
@@ -12,6 +11,14 @@ HELP: ./oss -h
 
 output goes to file named 'logfile' 
 the name of logfile can be changed using -l command
+-----------------------------------------------------
+
+updated oss.c file for setting up a semaphore,
+still need to add semaphore ID and the Permissions 
+to the node.h file for shared access.
+getopt is complete, as well as printing run settings. 
+most vars are declared. 
+
 -----------------------------------------------------
 
 

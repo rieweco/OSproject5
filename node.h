@@ -5,10 +5,12 @@
 
 //shared memory keys
 #define CLOCK_KEY 1400
+#define D_KEY 1200
 #define R_KEY 1000
 
+
 //semaphore vars
-#define S_NAME "/newSem"
+#define S_ID "/newSem"
 #define S_PERMISSIONS (S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP)
 
 //clock struct: holds seconds and nanoseconds

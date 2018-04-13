@@ -26,5 +26,10 @@ memory: clock, resourcesDescriptors, resourceRequests,
 and allocation attempts.
 Also added alarm function to oss.c
 ----------------------------------------------------
+for loop started for main resource mgmt algorithm.
+need to add deadlock detection and finish main while loop.
+also - updated node.h to include a couple more vars in 
+the structs for requests.
+----------------------------------------------------
 
 

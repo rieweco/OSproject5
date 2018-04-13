@@ -37,7 +37,7 @@ sem_t *sem;
 //function declarations
 void int_Handler(int);
 void helpOptionPrint();
-void programRunSettingsPrint(char *file, int runtime);
+void programRunSettingsPrint(char *file, int runtime, int verbose);
 
 //main
 int main(int argc, char *argv[])
@@ -94,8 +94,33 @@ int main(int argc, char *argv[])
 	pidArray = pids;
 
 	//print out prg settings
-	programRunSettingsPrint(filename,runtime);
+	programRunSettingsPrint(filename,runtime,verboseFlag);
+
+	//set up alarm handler
+	if(signal(SIGALRM, int_Handler) == SIG_ERR)
+	{
+		perror("SINGAL ERROR: SIGALRM failed catch!\n");
+		exit(errno);
+	}
 	
+	alarm(runtime);
+
+	//set up shared memory 
+	clockMemoryID = shmget(CLOCK_KEY, sizeof(Clock), IPC_CREAT | 0666);
+	if(clockMemoryID < 0)
+	{
+		perror("Creating clock shared memory Failed!!\n");
+		exit(errno);
+	}
+	
+	//attach clock
+	sharedClock = shmat(clockMemoryID, NULL, 0);
+	
+	//initialize clock
+	sharedClock->seconds = 0;
+	sharedClock->nanoseconds = 0;
+
+	//
 	
 
 

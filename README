@@ -21,5 +21,10 @@ most vars are declared.
 
 -----------------------------------------------------
 
+updating node.h file to include structs for shared
+memory: clock, resourcesDescriptors, resourceRequests, 
+and allocation attempts.
+Also added alarm function to oss.c
+----------------------------------------------------
 
 

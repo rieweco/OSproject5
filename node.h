@@ -25,7 +25,7 @@ Clock;
 typedef struct AllocatedBy
 {
 	pid_t pid;
-	int attempts;
+	int used;
 }
 AllocatedBy;
 
@@ -44,6 +44,7 @@ ResourceDescriptor;
 typedef struct ResourceRequest
 {
 	pid_t pid;
+	int pNum;
 	//vars to update the sharedClock
 	int sec;
 	int nano;

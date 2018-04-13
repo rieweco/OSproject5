@@ -34,12 +34,18 @@ char* filename;
 sem_t *sem;
 ResourceDescriptor *d;
 ResourceRequest *r;
-
+int clockMemoryID;
+int dID;
+int rID;
 
 //function declarations
 void int_Handler(int);
 void helpOptionPrint();
 void programRunSettingsPrint(char *file, int runtime, int verbose);
+int detachAndRemove(int shmid, void *shmaddr)
+void alarm_Handler(int sig)
+
+
 
 //main
 int main(int argc, char *argv[])
@@ -48,11 +54,7 @@ int main(int argc, char *argv[])
 	signal(SIGINT, int_Handler);
 	
 	//declare vars
-	int clockMemoryID;
-	int dID;
-	int rID;
 	int opt = 0;
-	int wait_status;
 	filename = DEFAULT_FILENAME;
 	int runtime = DEFAULT_RUNTIME;
 	int verboseFlag = DEFAULT_VERBOSE;
@@ -63,6 +65,12 @@ int main(int argc, char *argv[])
 	int j = 0;
 	int k = 0;
 	int spawnTime = 0;
+	
+	//statistic vars for final fprintf
+	int grantedRequests = 0;
+	int blockedTime = 0;
+	int dlRun = 0;
+	int dlReq = 0;
 	
 	//roll for number of intial shared resources(5->10)
 	srand(time(NULL));
@@ -188,7 +196,7 @@ int main(int argc, char *argv[])
 		r[i].nano = -1;
 		r[i].resourceNumber = -1;
 		r[i].numResources = -1;
-		r[i].isAllowed = -1;
+		r[i].reqComplete = -1;
 	}
 
 
@@ -213,6 +221,12 @@ int main(int argc, char *argv[])
 
 	while(count < 10 && ((sharedClock->seconds * 1000000000) + sharedClock->nanoseconds) < 2000000000)
 	{
+		//logfile line check: turn verbose off if above 90% full
+		if(logLineCount > 90000)
+		{
+			verboseFlag == 0;
+		}
+
 		int currentTime = ((sharedClock->seconds * 1000000000) + sharedClock->nanoseconds);
 		//check current time vs spawn time for creating new user process
 		if(currentTime >= spawnTime)
@@ -255,7 +269,7 @@ int main(int argc, char *argv[])
 		}
 
 		//check requests
-		if(r[rn].isAllowed == 0)
+		if(r[rn].reqComplete == 0)
 		{
 			//check for verbose Flag
 			if(verboseFlag == 1)
@@ -265,33 +279,308 @@ int main(int argc, char *argv[])
 			}
 		
 			//check if Resource being requested is shared
+			
+			//resource NOT shared
 			if(d[r[rn].resourceNumber].isShared == 0)
 			{
 				//if shared, check if it is in use. if yes: deny, if no: check unallocated amt
-
+				if(d[r[rn].resourceNumber].allocated > 0)
+				{
+					//** put process into block queue **
+					printf("OSS: resource is not shared and is in use. blocking P%d\n",r[rn].pNum);
+					if(verboseFlag == 1)
+					{
+						fprintf(logfile,"Master blocking P%d for requesting R%d at time %d:%d\n",r[rn].pNum,r[rn].resourceNumber,r[rn].sec,r[rn].nano);
+					logLineCount++;
+					}
+				}
+				else
+				{	
+					int resLeft = d[r[rn].resourceNumber].total - d[r[rn].resourceNumber].allocated;
+					if(r[rn].numResources < resLeft)
+					{
+						d[r[rn].resourceNumber].allocated = d[r[rn].resourceNumber].allocated + r[rn].numResources;
+						r[rn].reqComplete = 1;
+						
+						//check for verbose flag
+						if(verboseFlag == 1)
+						{
+							fprintf(logfile,"Master granting P%d request for R%d at time %d:%d\n",r[rn].pNum,r[rn].resourceNumber,r[rn].sec,r[rn].nano);
+							logLineCount++;
+						}
+						
+						printf("OSS: resource is NOT shared. P%d has access to use R%d\n",r[rn].pNum,r[rn].resourceNumber);
+						//update proc[] array in the resource with the granted resource request
+						for(i = 0; i < 10; i++)
+						{
+							if(d[r[rn].resourceNumber].proc[i].used < 1)
+							{
+								d[r[rn].resourceNumber].proc[i].pid = r[rn].pNum;
+								d[r[rn].resourceNumber].proc[i].used = r[rn].numResources;
+					
+								//break out of loop
+								break;
+							}
+							else
+							{
+								continue;
+							}
+						}
+					}
+					else
+					{
+						//check for verbose flag
+						if(verboseFlag == 1)
+						{
+							fprintf(logfile,"Master blocking P%d for requesting R%d at time %d:%d\n",r[rn].pNum,r[rn].resourceNumber,r[rn].sec,r[rn].nano);
+							logLineCount++;
+						}
+					}	
+				
+				}
 			}
+			//resource IS shared
+			else
+			{
+				//check unallocated amt
+				int resLeft = d[r[rn].resourceNumber].total - d[r[rn].resourceNumber].allocated;
+				if(r[rn].numResources < resLeft)
+				{
+					d[r[rn].resourceNumber].allocated = d[r[rn].resourceNumber].allocated + r[rn].numResources;
+					r[rn].reqComplete = 1;
+					
+					//check for verbose flag
+					if(verboseFlag == 1)
+					{
+						fprintf(logfile,"Master granting P%d request for R%d at time %d:%d\n",r[rn].pNum,r[rn].resourceNumber,r[rn].sec,r[rn].nano);
+						logLineCount++;
+					}
+					
+					printf("OSS: resource IS shared. P%d has access to use R%d\n",r[rn].pNum,r[rn].resourceNumber);
+					//update proc[] array in the resource with the granted resource request
+					for(i = 0; i < 10; i++)
+					{
+						if(d[r[rn].resourceNumber].proc[i].used < 1)
+						{
+							d[r[rn].resourceNumber].proc[i].pid = r[rn].pNum;
+							d[r[rn].resourceNumber].proc[i].used = r[rn].numResources;
+					
+							//break out of loop
+							break;
+						}
+						else
+						{
+							continue;
+						}
+					}
+				}
+				else
+				{
+					//check for verbose flag
+					if(verboseFlag == 1)
+					{
+						fprintf(logfile,"Master blocking P%d for requesting R%d at time %d:%d\n",r[rn].pNum,r[rn].resourceNumber,r[rn].sec,r[rn].nano);
+						logLineCount++;
+					}
+				}
+			}
+			
+			//incr rn and check value ( max 10 requests at once)
+			rn++;
+			if(rn > 10)
+			{
+				rn = 0;
+			}
+			
+			//initialize r[rn] data back to -1 so another request can take its spot
+			r[rn].pid = -1;
+			r[rn].pNum = -1;
+			r[rn].sec = -1;
+			r[rn].nano = -1;
+			r[rn].resourceNumber = -1;
+			r[rn].numResources = -1;
+			r[rn].reqComplete = -1;
+			
 		}
+		else
+		{
+			//incr rn and check value ( max 10 requests at once)
+			rn++;
+			if(rn > 10)
+			{
+				rn = 0;
+			}
+	
+		}
+
+		//if nothing is happening, add 200000 ns to the clock
+		sharedClock->nanoseconds = sharedClock->nanoseconds + 200000;
+	
+		if(sharedClock->nanoseconds > 1000000000)
+		{
+			sharedClock->nanoseconds = sharedClock->nanoseconds - 1000000000;
+			sharedClock->seconds = sharedClock->seconds + 1;
+		}
+
+	
 	}
 
 
+	
+	printf("************** DONE WITH WHILE LOOP ***************\n");
+	
+	//kill user processes
+	if(numberOfUserProcesses > 0)
+	{
+		for(i = 0; i < 18; i++)
+		{
+			kill((*pids)[i], SIGTERM);
+		}
+	}
+	
+	//wait for user processes to finish	
+	printf("OSS: waiting for user processes to finish\n");
+	
+	wait(NULL);
+	
+	fprintf(logfile, "Master finished running at time %d:%d\n",sharedClock->seconds,sharedClock->nanoseconds);
+	fprintf(logfile, "---------------------------------------------\n");
+	fprintf(logfile, "-Statistics: \n");
+	fprintf(logfile, "-\tGranted Requests:\t%d\n",grantedRequests);
+	fprintf(logfile, "-\tTotal Time Blocked:\t%d\n",blockedTime);
+	fprintf(lofgile, "-\tDeadlock Avoidance Ran %d Times\n",dlRun);
+	int dlRatio = grantedRequests / dlReq;
+	fprintf(logfile, "-\tDeadlock Approval Rate:\t%d%\n",dlRatio);
+	fprintf(logfile, "---------------------------------------------\n");
+	
 
+	//free shared memory and semaphores
+	detachAndRemove(clockMemoryID,sharedClock);
+	detachAndRemove(dID,d);
+	detachAndRemove(rID,r);
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+	free(pidArray);
+	sem_unlink(S_ID);
+	sem_close(sem);
+	fclose(logfile);
+	
 
 }
+
+
+//function to display options when -h is used as execution arg
+void helpOptionPrint()
+{
+        printf("program help:\n"); 
+        printf("        use option [-l filename] to set the filename for the logfile(where filename is the name of the logfile).\n");
+        printf("        use option [-t z] to set the max time the program will run before terminating all processes (where z is the time in seconds, default: 20 seconds).\n");
+	printf("        use option [-v] to set Verbose Logging ON. Verbose Logging adds more details to the Log File after Execution.\n");
+        printf("        NOTE: PRESS CTRL-C TO TERMINATE PROGRAM ANYTIME.\n");
+        exit(0);
+}
+
+//function to display program run settings
+void programRunSettingsPrint(char *file, int runtime, int verbose)
+{
+        printf("Program Run Settings:\n"); 
+        fprintf(stderr,"\tLog File Name:\t%s\n", file);
+        fprintf(stderr,"\tMax Run Time:\t%d\n", runtime);
+	if(verboseFlag == 0)
+	{
+		printf("\tVerbose Logging:\tOFF\n");
+	}
+	else
+	{
+		printf("\tVerbose Logging:\tON\n");
+	}
+}
+
+//function to detach and remove shared memory -- from UNIX book
+int detachAndRemove(int shmid, void *shmaddr)
+{
+	int error = 0;
+	if(shmdt(shmaddr) == -1)
+	{
+		error = errno;	
+	}
+	if((shmctl(shmid, IPC_RMID, NULL) == -1) && !error)
+	{
+		error = errno;
+	}
+	if(!error)
+	{
+		return 0;
+	}
+	errno = error;
+	return -1;
+}
+
+//function for exiting on ctrl-c
+void int_Handler(int sig)
+{
+       	signal(sig, SIG_IGN);
+        printf("Program terminated using Ctrl-C\n");
+       
+	detachAndRemove(clockMemoryID,sharedClock);
+	detachAndRemove(dID,d);
+	detachAndRemove(rID,r);
+ 
+	free(pidArray);
+	sem_unlink(S_ID);
+	sem_close(sem);
+	fclose(logfile);
+	
+
+	exit(0);
+}
+
+//alarm function
+void alarm_Handler(int sig)
+{
+	int i;
+	printf("Alarm! Time is UP!\n");
+	
+	detachAndRemove(clockMemoryID,sharedClock);
+	detachAndRemove(dID,d);
+	detachAndRemove(rID,r);
+	
+	free(pidArray);
+	sem_unlink(S_ID);
+	sem_close(sem);
+	fclose(logfile);
+	
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

@@ -31,5 +31,9 @@ need to add deadlock detection and finish main while loop.
 also - updated node.h to include a couple more vars in 
 the structs for requests.
 ----------------------------------------------------
-
+I finished the main while loop for memory mgmt. Still
+need to implement the deadlock alg. Moving onto user.c, 
+then will update the deadlock. want to test it runs before
+worrying about the deadlock part.
+----------------------------------------------------
 

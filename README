@@ -36,4 +36,10 @@ need to implement the deadlock alg. Moving onto user.c,
 then will update the deadlock. want to test it runs before
 worrying about the deadlock part.
 ----------------------------------------------------
+user.c is almost complete. Need to finish algorithm for 
+user.c to either request or release a resource. Will
+implement a random roll of some sort to decide which to 
+do. Also need to write code for deadlock detection and 
+block queue. almost done...
+----------------------------------------------------
 

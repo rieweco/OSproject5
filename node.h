@@ -21,6 +21,14 @@ typedef struct Clock
 }
 Clock;
 
+//struct used by user processes to track resources in use
+typedef struct UserResources
+{
+	int resourceNumber;
+	int taken;
+}
+UserResources;
+
 //allocation attempts struct: to be used in ResourceDescriptor struct
 typedef struct AllocatedBy
 {

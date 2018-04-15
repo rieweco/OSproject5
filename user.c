@@ -22,8 +22,8 @@ int rID;
 ResourceDescriptor *d;
 ResourceRequest *r;
 Clock *sharedClock;
-
-
+int processNum;
+UserResources ur[10];
 
 int main(int argc, char *argv[])
 {
@@ -56,9 +56,6 @@ int main(int argc, char *argv[])
 	int timer;
 	pid_t userID = (long)getpid();
 	
-	//set up user requests array for MAX of 10 resources requested
-	struct UserRequest ur[10];
-	
 	//set up rand()
 	srand(time(NULL));
 	rolledReqTime = (rand() % bound) + 1;
@@ -75,7 +72,7 @@ int main(int argc, char *argv[])
 	sharedClock = shmat(clockMemoryID, NULL, 0);
 
 	//set up shared memory for resource descriptor
-	dID = shmget(D_KEY, (sizeof(ResourceDescriptor)*rLimit), 0666);
+	dID = shmget(D_KEY, (sizeof(ResourceDescriptor)*20), 0666);
 	if(dID < 0)
 	{
 		perror("Inside User Process: Creating Resource Descriptor shared memory Failed!!\n");
@@ -97,11 +94,23 @@ int main(int argc, char *argv[])
 
 	//set current time for initial while loop check
 	timer = ((sharedClock->seconds * 1000000000) + (sharedClock->nanoseconds));
+	
+
+	//initialize ur array values
+	int j;
+	for(j = 0; j < 10; j++)
+	{
+		ur[j].resourceNumber = -1;
+		ur[j].taken = -1;
+	}
+	printf("array initialized\n");
 
 	//while loop to run while terminate flag is off (0)	
 	while(termFlag == 0)
 	{
-		rolledReqTime = rand() bound;
+		printf("USER: INSIDE WHILE LOOP!\n");
+		printf("print stuff: %d %d %d\n",timer, r[0].pNum,ur[0].taken);
+		rolledReqTime = rand() % bound;
 		if(timer <= (timer + rolledReqTime))
 		{
 			//roll termination: 1% chance to terminate
@@ -113,7 +122,7 @@ int main(int argc, char *argv[])
 				//release taken resources and decrement grantedResources to 0
 				for(i = 0; i < 10; i++)
 				{
-					d[ur[i].resourceNum].allocated = d[ur[i].resourceNum].allocated - ur[i].taken;
+					d[ur[i].resourceNumber].allocated = d[ur[i].resourceNumber].allocated - ur[i].taken;
 					ur[i].resourceNumber = -1;
 					ur[i].taken = 0;
 					
@@ -130,14 +139,15 @@ int main(int argc, char *argv[])
 				releaseRoll = rand() % 10;
 				
 				//request resource
-				if(releaseRoll < 5)
+				if(releaseRoll < 7)
 				{
 					//roll to see which resource we need
 					resourceNumber = rand() % 20;
 					int rqNum = sharedClock->numberOfRequests;	
 					//wait for semephore access
 					sem_wait(sem);
-					
+					printf("rqNum: %d\n",rqNum);
+	
 					r[rqNum].pid = userID;
 					r[rqNum].pNum = processNum;
 					r[rqNum].sec = sharedClock->seconds;
@@ -154,11 +164,13 @@ int main(int argc, char *argv[])
 					
 					//increment number of requests 
 					sharedClock->numberOfRequests = sharedClock->numberOfRequests + 1;
+					printf("#ofReq: %d\n",sharedClock->numberOfRequests);
 					
 					//wait for request to be granted
 					sem_post(sem);
+					printf("USER: P%d SEM POSTED.\n",processNum);
 						
-					while(r[rqNum].isAllowed == 0)
+					while(r[rqNum].isAllowed != 1)
 					{
 						;	
 					}
@@ -177,7 +189,7 @@ int main(int argc, char *argv[])
 				else 
 				{
 					//find first resource and release it
-					if(ur[grantedResources].taken != 0)
+					if(ur[grantedResources].taken > 0)
 					{
 						printf("User P%d releasing %d of R%d\n",processNum,ur[grantedResources].taken,ur[grantedResources].resourceNumber);
 						d[ur[grantedResources].resourceNumber].allocated = d[ur[grantedResources].resourceNumber].allocated - ur[grantedResources].taken;

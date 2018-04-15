@@ -37,6 +37,7 @@ ResourceRequest *r;
 int clockMemoryID;
 int dID;
 int rID;
+int verboseFlag;
 
 //function declarations
 void int_Handler(int);
@@ -57,7 +58,7 @@ int main(int argc, char *argv[])
 	int opt = 0;
 	filename = DEFAULT_FILENAME;
 	int runtime = DEFAULT_RUNTIME;
-	int verboseFlag = DEFAULT_VERBOSE;
+	verboseFlag = DEFAULT_VERBOSE;
 	int logLineCount = 0;
 	int rLimit = RESOURCE_LIMIT;
 	int numSharedResources;
@@ -75,6 +76,7 @@ int main(int argc, char *argv[])
 	//roll for number of intial shared resources(5->10)
 	srand(time(NULL));
 	numSharedResources = (rand() % 5 + 5); 
+	printf("numShared: %d\n",numSharedResources);
 
 	//read command line options
 	 while((opt = getopt(argc, argv, "h l:t:v")) != -1)
@@ -99,6 +101,11 @@ int main(int argc, char *argv[])
 
         }
 
+	//clear exisiting semaphore
+	if (sem_unlink(S_ID) < 0){
+		perror("sem_unlink(3) failed");
+	}
+
 	//set up semaphore
 	sem = sem_open(S_ID, O_CREAT | O_EXCL, S_PERMISSIONS,0);
 	if(sem == SEM_FAILED)
@@ -108,10 +115,8 @@ int main(int argc, char *argv[])
 	}
 	
 	//create pid array
-	pid_t parentID;
 	pid_t userID;
-	pid_t (*pids)[18] = malloc(sizeof(*pids));
-	pidArray = pids;
+	pid_t (*pids)[18] = malloc(sizeof *pids);
 
 	//print out prg settings
 	programRunSettingsPrint(filename,runtime,verboseFlag);
@@ -160,7 +165,7 @@ int main(int argc, char *argv[])
 		d[i].allocated = 0;
 		
 		//make resources shared until we have numSharedResources(random roll above) 
-		if(j < numSharedResources)
+		if(i < numSharedResources)
 		{
 			d[i].isShared = 1;
 		} 
@@ -193,26 +198,30 @@ int main(int argc, char *argv[])
 	for(i = 0; i < 10; i++)
 	{
 		r[i].pid = -1;
+		r[i].pNum = -1;
 		r[i].sec = -1;
 		r[i].nano = -1;
 		r[i].resourceNumber = -1;
 		r[i].numResources = -1;
-		r[i].reqComplete = -1;
+		r[i].isAllowed = -1;
 	}
 
 
 	alarm(runtime);
 	
 	//initialize log file
-	logfile = fopen(filename, "w");
-	fprintf(logfile,"OSS: Resource Management Program Starting!\n");
-	logLineCount++;
-	fclose(logfile);
-
+	if(logLineCount < 1)
+	{
+		logfile = fopen(filename, "w");
+		fprintf(logfile,"OSS: Resource Management Program Starting!\n");
+		logLineCount++;
+		fclose(logfile);
+	}
 
 	//open log file for appending
 	logfile = fopen(filename, "a");
-	
+	fprintf(logfile,"First Append\n");
+		
 	//get spawn time for next user
 	spawnTime = (rand() % 500000) + 1;	
 
@@ -220,21 +229,22 @@ int main(int argc, char *argv[])
 	//rn: request number (max 10 req at once)
 	int rn = 0;	
 
-	while(count < 10 && ((sharedClock->seconds * 1000000000) + sharedClock->nanoseconds) < 2000000000)
+	while(((sharedClock->seconds * 1000000000) + sharedClock->nanoseconds) < 2000000000)
 	{
 		//logfile line check: turn verbose off if above 90% full
 		if(logLineCount > 90000)
 		{
-			verboseFlag == 0;
+			verboseFlag = 0;
 		}
 
 		int currentTime = ((sharedClock->seconds * 1000000000) + sharedClock->nanoseconds);
 		//check current time vs spawn time for creating new user process
-		if(currentTime >= spawnTime)
+		if(currentTime >= spawnTime && numberOfUserProcesses < 18)
 		{
-			printf("Its time to spawn a user process!!\n");
 			if(numberOfUserProcesses < 18)
 			{
+				printf("Its time to spawn a user process!!\n");
+			
 				(*pids)[numberOfUserProcesses] = fork();
 				userID = (*pids)[numberOfUserProcesses];
 				
@@ -270,7 +280,7 @@ int main(int argc, char *argv[])
 		}
 
 		//check requests
-		if(r[rn].reqComplete == 0)
+		if(r[rn].isAllowed == 0)
 		{
 			//check for verbose Flag
 			if(verboseFlag == 1)
@@ -284,6 +294,7 @@ int main(int argc, char *argv[])
 			//resource NOT shared
 			if(d[r[rn].resourceNumber].isShared == 0)
 			{
+				printf("resource is not shared!\n");
 				//if not shared, check if it is in use. if yes: deny, if no: check unallocated amt
 				if(d[r[rn].resourceNumber].allocated > 0)
 				{
@@ -301,7 +312,7 @@ int main(int argc, char *argv[])
 					if(r[rn].numResources < resLeft)
 					{
 						d[r[rn].resourceNumber].allocated = d[r[rn].resourceNumber].allocated + r[rn].numResources;
-						r[rn].reqComplete = 1;
+						r[rn].isAllowed = 1;
 										
 
 						//check for verbose flag
@@ -345,12 +356,13 @@ int main(int argc, char *argv[])
 			//resource IS shared
 			else
 			{
+				printf("resource is shared!\n");
 				//check unallocated amt
 				int resLeft = d[r[rn].resourceNumber].total - d[r[rn].resourceNumber].allocated;
 				if(r[rn].numResources < resLeft)
 				{
 					d[r[rn].resourceNumber].allocated = d[r[rn].resourceNumber].allocated + r[rn].numResources;
-					r[rn].reqComplete = 1;
+					r[rn].isAllowed = 1;
 					
 					//check for verbose flag
 					if(verboseFlag == 1)
@@ -398,13 +410,14 @@ int main(int argc, char *argv[])
 			}
 			
 			//initialize r[rn] data back to -1 so another request can take its spot
+			printf("req array: pNum: %d, RN: %d\n", r[rn].pNum, r[rn].resourceNumber);
 			r[rn].pid = -1;
 			r[rn].pNum = -1;
 			r[rn].sec = -1;
 			r[rn].nano = -1;
 			r[rn].resourceNumber = -1;
 			r[rn].numResources = -1;
-			r[rn].reqComplete = -1;
+			r[rn].isAllowed = -1;
 			
 		}
 		else
@@ -418,8 +431,9 @@ int main(int argc, char *argv[])
 	
 		}
 
+
 		//if nothing is happening, add 200000 ns to the clock
-		sharedClock->nanoseconds = sharedClock->nanoseconds + 200000;
+		sharedClock->nanoseconds = sharedClock->nanoseconds + 100000;
 	
 		if(sharedClock->nanoseconds > 1000000000)
 		{
@@ -437,10 +451,10 @@ int main(int argc, char *argv[])
 		}
 	
 	}
-
-
 	
-	printf("************** DONE WITH WHILE LOOP ***************\n");
+	printProcessTable();
+	
+	fprintf(logfile,"************** DONE WITH WHILE LOOP ***************\n");
 	
 	//kill user processes
 	if(numberOfUserProcesses > 0)
@@ -461,9 +475,9 @@ int main(int argc, char *argv[])
 	fprintf(logfile, "-Statistics: \n");
 	fprintf(logfile, "-\tGranted Requests:\t%d\n",grantedRequests);
 	fprintf(logfile, "-\tTotal Time Blocked:\t%d\n",blockedTime);
-	fprintf(lofgile, "-\tDeadlock Avoidance Ran %d Times\n",dlRun);
+	fprintf(logfile, "-\tDeadlock Avoidance Ran %d Times\n",dlRun);
 	int dlRatio = grantedRequests / dlReq;
-	fprintf(logfile, "-\tDeadlock Approval Rate:\t%d%\n",dlRatio);
+	fprintf(logfile, "-\tDeadlock Approval Rate:\t%d %% \n",dlRatio);
 	fprintf(logfile, "---------------------------------------------\n");
 	
 
@@ -478,6 +492,7 @@ int main(int argc, char *argv[])
 	fclose(logfile);
 	
 
+	return 0;
 }
 
 
@@ -496,8 +511,8 @@ void helpOptionPrint()
 void programRunSettingsPrint(char *file, int runtime, int verbose)
 {
         printf("Program Run Settings:\n"); 
-        fprintf(stderr,"\tLog File Name:\t%s\n", file);
-        fprintf(stderr,"\tMax Run Time:\t%d\n", runtime);
+        fprintf(stderr,"\tLog File Name:\t\t%s\n", file);
+        fprintf(stderr,"\tMax Run Time:\t\t%d\n", runtime);
 	if(verboseFlag == 0)
 	{
 		printf("\tVerbose Logging:\tOFF\n");
@@ -532,7 +547,7 @@ int detachAndRemove(int shmid, void *shmaddr)
 void int_Handler(int sig)
 {
        	signal(sig, SIG_IGN);
-        printf("Program terminated using Ctrl-C\n");
+        fprintf(logfile,"Program terminated using Ctrl-C\n");
        
 	detachAndRemove(clockMemoryID,sharedClock);
 	detachAndRemove(dID,d);
@@ -570,17 +585,17 @@ void printProcessTable()
 	//logfile = fopen(filename, "a");
 	int i;
 	int j;
-	printf("   R00  R01  R02  R03  R04  R05  R06  R07  R08  R09 R10 R11 R12 R13 R14 R15 R16 R17 R18 R19\n");
+	fprintf(logfile,"   R00  R01  R02  R03  R04  R05  R06  R07  R08  R09 R10 R11 R12 R13 R14 R15 R16 R17 R18 R19\n");
 	for(i = 0; i < numberOfUserProcesses; i++)
 	{
-		fprintf("P%d ",i);
+		fprintf(logfile,"P%d ",i);
 		for(j = 0; j < 20; j++)
 		{
 			if(j < 10)
 			{
-				fprintf(" ");
+				fprintf(logfile," ");
 			}
-			fprintf(" %d ",d[i].proc[j].used); 
+			fprintf(logfile," %d ",d[i].proc[j].used); 
 		}
 	}
 
@@ -588,7 +603,7 @@ void printProcessTable()
 
 //bankers algorith for deadlock safe state check
 //taken from https://www.thecrazyprogrammer.com/2016/07/bankers-algorithm-in-c.html
-
+/*
 int current[5][5], maximum_claim[5][5], available[5];
 int allocation[5] = {0, 0, 0, 0, 0};
 int maxres[5], running[5], safe = 0;
@@ -736,7 +751,7 @@ int main()
         return 0;
 }
 
-
+*/
 
 
 

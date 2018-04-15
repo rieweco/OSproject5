@@ -46,12 +46,15 @@ int main(int argc, char *argv[])
 	}
 	
 	//declare vars
+	int grantedResources = 0;
 	int bound = MAX_BOUND;
 	int resourceNumber;
-	int releaseFlag = 0;
+	int releaseRoll;
+	int termFlag = 0;
 	int rolledReqTime;
 	int termRoll;
 	int timer;
+	pid_t userID = (long)getpid();
 	
 	//set up user requests array for MAX of 10 resources requested
 	struct UserRequest ur[10];
@@ -91,27 +94,113 @@ int main(int argc, char *argv[])
 	//attach requests
 	r = shmat(rID, NULL, 0);
 
+
+	//set current time for initial while loop check
+	timer = ((sharedClock->seconds * 1000000000) + (sharedClock->nanoseconds));
+
+	//while loop to run while terminate flag is off (0)	
+	while(termFlag == 0)
+	{
+		rolledReqTime = rand() bound;
+		if(timer <= (timer + rolledReqTime))
+		{
+			//roll termination: 1% chance to terminate
+			termRoll = (rand() % 1000) + 1;
+			if(termRoll > 990)
+			{
+				printf("Terminating P%d from Termination Roll.\n", processNum);
+				int i;
+				//release taken resources and decrement grantedResources to 0
+				for(i = 0; i < 10; i++)
+				{
+					d[ur[i].resourceNum].allocated = d[ur[i].resourceNum].allocated - ur[i].taken;
+					ur[i].resourceNumber = -1;
+					ur[i].taken = 0;
+					
+					if(grantedResources != 0)
+					{
+						grantedResources--;
+					}
+					
+				}
+				continue;
+			}
+			else
+			{
+				releaseRoll = rand() % 10;
+				
+				//request resource
+				if(releaseRoll < 5)
+				{
+					//roll to see which resource we need
+					resourceNumber = rand() % 20;
+					int rqNum = sharedClock->numberOfRequests;	
+					//wait for semephore access
+					sem_wait(sem);
+					
+					r[rqNum].pid = userID;
+					r[rqNum].pNum = processNum;
+					r[rqNum].sec = sharedClock->seconds;
+					r[rqNum].nano = sharedClock->nanoseconds;
+					r[rqNum].resourceNumber = resourceNumber;
+					int availRes = d[resourceNumber].total;
+					
+					//roll for number of resources requested
+					int rqRoll = (rand() % availRes) + 1;
+					r[rqNum].numResources = rqRoll;
+					r[rqNum].isAllowed = 0;
+					
+					printf("User P%d requesting %d of R%d\n",processNum,rqRoll,resourceNumber);
+					
+					//increment number of requests 
+					sharedClock->numberOfRequests = sharedClock->numberOfRequests + 1;
+					
+					//wait for request to be granted
+					sem_post(sem);
+						
+					while(r[rqNum].isAllowed == 0)
+					{
+						;	
+					}
+					
+					//granted!
+					printf("User P%d's request granted!!\n",processNum);
+			
+					ur[grantedResources].resourceNumber = r[rqNum].resourceNumber;
+					ur[grantedResources].taken = r[rqNum].numResources;
+					grantedResources++;
+					
+					//break out of loop
+					break;
+				}
+				//release resource
+				else 
+				{
+					//find first resource and release it
+					if(ur[grantedResources].taken != 0)
+					{
+						printf("User P%d releasing %d of R%d\n",processNum,ur[grantedResources].taken,ur[grantedResources].resourceNumber);
+						d[ur[grantedResources].resourceNumber].allocated = d[ur[grantedResources].resourceNumber].allocated - ur[grantedResources].taken;
+					
+						//update local resource array and resources taken count
+						ur[grantedResources].resourceNumber = -1;
+						ur[grantedResources].taken = 0;
+						grantedResources--;
+					}
+		
+					break;
+			
+				}
+			}
+			
+		}	
 	
-
+		//update local clock var to what shared clock is
+		timer = ((sharedClock->seconds * 1000000000) + (sharedClock->nanoseconds));
+	}
 	
-
+	//end while loop!
 	
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 	return 0;
 
 }

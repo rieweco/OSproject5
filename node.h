@@ -18,6 +18,7 @@ typedef struct Clock
 {
         int seconds;
         int nanoseconds;
+	int numberOfRequests;
 }
 Clock;
 
@@ -43,8 +44,8 @@ typedef struct ResourceDescriptor
 	int total;
 	int allocated;
 	int isShared;
-	//array of specific allocations and max attempts: 10 spaces for MAX num instances
-	struct AllocatedBy proc[10];
+	//array of specific allocations
+	struct AllocatedBy proc[18];
 }
 ResourceDescriptor;
 

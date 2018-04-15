@@ -42,9 +42,9 @@ int rID;
 void int_Handler(int);
 void helpOptionPrint();
 void programRunSettingsPrint(char *file, int runtime, int verbose);
-int detachAndRemove(int shmid, void *shmaddr)
-void alarm_Handler(int sig)
-
+int detachAndRemove(int shmid, void *shmaddr);
+void alarm_Handler(int sig);
+void printProcessTable();
 
 
 //main
@@ -139,6 +139,7 @@ int main(int argc, char *argv[])
 	//initialize clock
 	sharedClock->seconds = 0;
 	sharedClock->nanoseconds = 0;
+	sharedClock->numberOfRequests = 0;
 
 	//set up shared memory for Resource Descriptor
 	dID = shmget(D_KEY, (sizeof(ResourceDescriptor)*rLimit), IPC_CREAT | 0666);
@@ -169,10 +170,10 @@ int main(int argc, char *argv[])
 		}
 		
 		//set up array for req count for each resource instance 
-		for(k = 0; k < rollTotal; k++)
+		for(k = 0; k < 18; k++)
 		{
-			d[i].instance[k].pid = -1;
-			d[i].instance[k].attempts = -1;
+			d[i].proc[k].pid = k;
+			d[i].proc[k].used = 0;
 		}
 		
 		printf("Resource #%d, total: %d, isShared: %d\n",i, d[i].total,d[i].isShared);
@@ -283,7 +284,7 @@ int main(int argc, char *argv[])
 			//resource NOT shared
 			if(d[r[rn].resourceNumber].isShared == 0)
 			{
-				//if shared, check if it is in use. if yes: deny, if no: check unallocated amt
+				//if not shared, check if it is in use. if yes: deny, if no: check unallocated amt
 				if(d[r[rn].resourceNumber].allocated > 0)
 				{
 					//** put process into block queue **
@@ -301,7 +302,8 @@ int main(int argc, char *argv[])
 					{
 						d[r[rn].resourceNumber].allocated = d[r[rn].resourceNumber].allocated + r[rn].numResources;
 						r[rn].reqComplete = 1;
-						
+										
+
 						//check for verbose flag
 						if(verboseFlag == 1)
 						{
@@ -311,7 +313,8 @@ int main(int argc, char *argv[])
 						
 						printf("OSS: resource is NOT shared. P%d has access to use R%d\n",r[rn].pNum,r[rn].resourceNumber);
 						//update proc[] array in the resource with the granted resource request
-						for(i = 0; i < 10; i++)
+						d[r[rn].resourceNumber].proc[r[rn].resourceNumber].used = d[r[rn].resourceNumber].proc[r[rn].resourceNumber].used + r[rn].numResources;
+						/*for(i = 0; i < 10; i++)
 						{
 							if(d[r[rn].resourceNumber].proc[i].used < 1)
 							{
@@ -325,7 +328,7 @@ int main(int argc, char *argv[])
 							{
 								continue;
 							}
-						}
+						}*/
 					}
 					else
 					{
@@ -358,6 +361,8 @@ int main(int argc, char *argv[])
 					
 					printf("OSS: resource IS shared. P%d has access to use R%d\n",r[rn].pNum,r[rn].resourceNumber);
 					//update proc[] array in the resource with the granted resource request
+					d[r[rn].resourceNumber].proc[r[rn].resourceNumber].used = d[r[rn].resourceNumber].proc[r[rn].resourceNumber].used + r[rn].numResources;
+					/*
 					for(i = 0; i < 10; i++)
 					{
 						if(d[r[rn].resourceNumber].proc[i].used < 1)
@@ -372,7 +377,7 @@ int main(int argc, char *argv[])
 						{
 							continue;
 						}
-					}
+					}*/
 				}
 				else
 				{
@@ -422,6 +427,14 @@ int main(int argc, char *argv[])
 			sharedClock->seconds = sharedClock->seconds + 1;
 		}
 
+		//print process table every 20 log lines, if verbose is on
+		if(verboseFlag == 1)
+		{
+			if((logLineCount % 20) == 0)
+			{
+				printProcessTable();
+			}
+		}
 	
 	}
 
@@ -442,7 +455,7 @@ int main(int argc, char *argv[])
 	printf("OSS: waiting for user processes to finish\n");
 	
 	wait(NULL);
-	
+		
 	fprintf(logfile, "Master finished running at time %d:%d\n",sharedClock->seconds,sharedClock->nanoseconds);
 	fprintf(logfile, "---------------------------------------------\n");
 	fprintf(logfile, "-Statistics: \n");
@@ -551,6 +564,177 @@ void alarm_Handler(int sig)
 	
 }
 
+//function to print process table matrix
+void printProcessTable()
+{
+	//logfile = fopen(filename, "a");
+	int i;
+	int j;
+	printf("   R00  R01  R02  R03  R04  R05  R06  R07  R08  R09 R10 R11 R12 R13 R14 R15 R16 R17 R18 R19\n");
+	for(i = 0; i < numberOfUserProcesses; i++)
+	{
+		fprintf("P%d ",i);
+		for(j = 0; j < 20; j++)
+		{
+			if(j < 10)
+			{
+				fprintf(" ");
+			}
+			fprintf(" %d ",d[i].proc[j].used); 
+		}
+	}
+
+}
+
+//bankers algorith for deadlock safe state check
+//taken from https://www.thecrazyprogrammer.com/2016/07/bankers-algorithm-in-c.html
+
+int current[5][5], maximum_claim[5][5], available[5];
+int allocation[5] = {0, 0, 0, 0, 0};
+int maxres[5], running[5], safe = 0;
+int counter = 0, i, j, exec, resources, processes, k = 1;
+ 
+int main()
+{
+    printf("\nEnter number of processes: ");
+        scanf("%d", &processes);
+ 
+        for (i = 0; i < processes; i++) 
+    {
+            running[i] = 1;
+            counter++;
+        }
+ 
+        printf("\nEnter number of resources: ");
+        scanf("%d", &resources);
+ 
+        printf("\nEnter Claim Vector:");
+        for (i = 0; i < resources; i++) 
+    { 
+            scanf("%d", &maxres[i]);
+        }
+ 
+       printf("\nEnter Allocated Resource Table:\n");
+        for (i = 0; i < processes; i++) 
+    {
+            for(j = 0; j < resources; j++) 
+        {
+              scanf("%d", &current[i][j]);
+            }
+        }
+ 
+        printf("\nEnter Maximum Claim Table:\n");
+        for (i = 0; i < processes; i++) 
+    {
+            for(j = 0; j < resources; j++) 
+        {
+                    scanf("%d", &maximum_claim[i][j]);
+            }
+        }
+ 
+    printf("\nThe Claim Vector is: ");
+        for (i = 0; i < resources; i++) 
+    {
+            printf("\t%d", maxres[i]);
+    }
+ 
+        printf("\nThe Allocated Resource Table:\n");
+        for (i = 0; i < processes; i++) 
+    {
+            for (j = 0; j < resources; j++) 
+        {
+                    printf("\t%d", current[i][j]);
+            }
+        printf("\n");
+        }
+ 
+        printf("\nThe Maximum Claim Table:\n");
+        for (i = 0; i < processes; i++) 
+    {
+            for (j = 0; j < resources; j++) 
+        {
+                printf("\t%d", maximum_claim[i][j]);
+            }
+            printf("\n");
+        }
+ 
+        for (i = 0; i < processes; i++) 
+    {
+            for (j = 0; j < resources; j++) 
+        {
+                    allocation[j] += current[i][j];
+            }
+        }
+ 
+        printf("\nAllocated resources:");
+        for (i = 0; i < resources; i++) 
+    {
+            printf("\t%d", allocation[i]);
+        }
+ 
+        for (i = 0; i < resources; i++) 
+    {
+            available[i] = maxres[i] - allocation[i];
+    }
+ 
+        printf("\nAvailable resources:");
+        for (i = 0; i < resources; i++) 
+    {
+            printf("\t%d", available[i]);
+        }
+        printf("\n");
+ 
+        while (counter != 0) 
+    {
+            safe = 0;
+            for (i = 0; i < processes; i++) 
+        {
+                    if (running[i]) 
+            {
+                        exec = 1;
+                        for (j = 0; j < resources; j++) 
+                {
+                                if (maximum_claim[i][j] - current[i][j] > available[j]) 
+                    {
+                                    exec = 0;
+                                    break;
+                                }
+                        }
+                        if (exec) 
+                {
+                                printf("\nProcess%d is executing\n", i + 1);
+                                running[i] = 0;
+                                counter--;
+                                safe = 1;
+ 
+                                for (j = 0; j < resources; j++) 
+                    {
+                                    available[j] += current[i][j];
+                                }
+                            break;
+                        }
+                    }
+            }
+            if (!safe) 
+        {
+                    printf("\nThe processes are in unsafe state.\n");
+                    break;
+            } 
+        else 
+        {
+                    printf("\nThe process is in safe state");
+                    printf("\nAvailable vector:");
+ 
+                    for (i = 0; i < resources; i++) 
+            {
+                        printf("\t%d", available[i]);
+                    }
+ 
+                printf("\n");
+            }
+        }
+        return 0;
+}
 
 
 

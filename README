@@ -42,4 +42,8 @@ implement a random roll of some sort to decide which to
 do. Also need to write code for deadlock detection and 
 block queue. almost done...
 ----------------------------------------------------
+user.c and oss.c are almost complete, still need to 
+add deadlock detection algorithm to finish this project.
+Starting debugging and testing before adding deadlock.
+----------------------------------------------------
 

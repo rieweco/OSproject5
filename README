@@ -13,6 +13,15 @@ output goes to file named 'logfile'
 the name of logfile can be changed using -l command
 -----------------------------------------------------
 
+
+
+As of right now, this compiles and runs, but the logfile isnt working. 
+The spawning processes and the shared memory works just fine.
+Deadlock safety check is not implemented. 
+
+
+
+----------------------------------------------------
 updated oss.c file for setting up a semaphore,
 still need to add semaphore ID and the Permissions 
 to the node.h file for shared access.

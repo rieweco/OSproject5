@@ -109,7 +109,6 @@ int main(int argc, char *argv[])
 	while(termFlag == 0)
 	{
 		printf("USER: INSIDE WHILE LOOP!\n");
-		printf("print stuff: %d %d %d\n",timer, r[0].pNum,ur[0].taken);
 		rolledReqTime = rand() % bound;
 		if(timer <= (timer + rolledReqTime))
 		{
@@ -145,7 +144,7 @@ int main(int argc, char *argv[])
 					resourceNumber = rand() % 20;
 					int rqNum = sharedClock->numberOfRequests;	
 					//wait for semephore access
-					sem_wait(sem);
+					//sem_wait(sem);
 					printf("rqNum: %d\n",rqNum);
 	
 					r[rqNum].pid = userID;
@@ -154,14 +153,16 @@ int main(int argc, char *argv[])
 					r[rqNum].nano = sharedClock->nanoseconds;
 					r[rqNum].resourceNumber = resourceNumber;
 					int availRes = d[resourceNumber].total;
-					
+						
+					printf("USER: r info: %d %d %d %d\n",r[rqNum].pNum,r[rqNum].sec,r[rqNum].nano,r[rqNum].resourceNumber);	
 					//roll for number of resources requested
-					int rqRoll = (rand() % availRes) + 1;
+					int rqRoll = (rand() % 5) + 1;
 					r[rqNum].numResources = rqRoll;
 					r[rqNum].isAllowed = 0;
 					
 					printf("User P%d requesting %d of R%d\n",processNum,rqRoll,resourceNumber);
 					
+					sem_wait(sem);
 					//increment number of requests 
 					sharedClock->numberOfRequests = sharedClock->numberOfRequests + 1;
 					printf("#ofReq: %d\n",sharedClock->numberOfRequests);

@@ -145,7 +145,8 @@ int main(int argc, char *argv[])
 	sharedClock->seconds = 0;
 	sharedClock->nanoseconds = 0;
 	sharedClock->numberOfRequests = 0;
-
+	
+	printf("OSS: CLOCK: sec: %d nano: %d req: %d\n",sharedClock->seconds,sharedClock->nanoseconds,sharedClock->numberOfRequests);
 	//set up shared memory for Resource Descriptor
 	dID = shmget(D_KEY, (sizeof(ResourceDescriptor)*rLimit), IPC_CREAT | 0666);
 	if(dID < 0)
@@ -163,7 +164,7 @@ int main(int argc, char *argv[])
 		int rollTotal = (rand() % 10) + 1;
 		d[i].total = rollTotal;
 		d[i].allocated = 0;
-		
+			
 		//make resources shared until we have numSharedResources(random roll above) 
 		if(i < numSharedResources)
 		{
@@ -209,17 +210,20 @@ int main(int argc, char *argv[])
 
 	alarm(runtime);
 	
-	//initialize log file
-	if(logLineCount < 1)
-	{
-		logfile = fopen(filename, "w");
-		fprintf(logfile,"OSS: Resource Management Program Starting!\n");
-		logLineCount++;
-		fclose(logfile);
-	}
-
-	//open log file for appending
 	logfile = fopen(filename, "a");
+	fprintf(logfile,"OSS: HELLO!\n");
+	//initialize log file
+	/*if(logLineCount < 1)
+	{
+	//	logfile = fopen(filename, "w");
+		fprintf(logfile,"OSS: Resource Management Program Starting!\n");
+		fprintf(logfile,"OSS: 2nd LINE\n");
+		logLineCount++;
+		//fclose(logfile);
+	}
+*/
+	//open log file for appending
+//	logfile = fopen(filename, "a");
 	fprintf(logfile,"First Append\n");
 		
 	//get spawn time for next user
@@ -411,14 +415,14 @@ int main(int argc, char *argv[])
 			
 			//initialize r[rn] data back to -1 so another request can take its spot
 			printf("req array: pNum: %d, RN: %d\n", r[rn].pNum, r[rn].resourceNumber);
-			r[rn].pid = -1;
+		/*	r[rn].pid = -1;
 			r[rn].pNum = -1;
 			r[rn].sec = -1;
 			r[rn].nano = -1;
 			r[rn].resourceNumber = -1;
 			r[rn].numResources = -1;
 			r[rn].isAllowed = -1;
-			
+		*/	
 		}
 		else
 		{
